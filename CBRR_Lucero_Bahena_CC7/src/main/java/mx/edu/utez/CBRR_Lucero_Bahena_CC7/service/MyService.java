@@ -4,6 +4,7 @@ package mx.edu.utez.CBRR_Lucero_Bahena_CC7.service;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import mx.edu.utez.CBRR_Lucero_Bahena_CC7.controller.dto.CrearPedidoDTO;
+import mx.edu.utez.CBRR_Lucero_Bahena_CC7.controller.dto.ProductoDTO;
 import mx.edu.utez.CBRR_Lucero_Bahena_CC7.controller.dto.RegistrarProductoDTO;
 import mx.edu.utez.CBRR_Lucero_Bahena_CC7.exception.CustomException;
 import mx.edu.utez.CBRR_Lucero_Bahena_CC7.model.EstadoPedido;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -31,13 +33,15 @@ public class MyService {
         this.pedidoRepository = pedidoRepository;
     }
 
+
+
+    @Transactional
     public Producto registrarProducto(RegistrarProductoDTO payload) {
         Producto producto = new Producto();
-        producto.setId(producto.getId());
-        producto.setCategoria(producto.getCategoria());
-        producto.setNombre(producto.getNombre());
-        producto.setPrecio(producto.getPrecio());
-        producto.setStock(producto.getStock());
+        producto.setCategoria(payload.getCategoria());
+        producto.setNombre(payload.getNombre());
+        producto.setPrecio(payload.getPrecio());
+        producto.setStock(payload.getStock());
         producto.setActivo(true);
         return productoRepository.save(producto);
 
@@ -68,8 +72,9 @@ public class MyService {
         pedido.setId(pedido.getId());
         pedido.setCantidad(payload.getCantidad());
         pedido.setEstadoPedido(EstadoPedido.PENDIENTE);
-        pedido.setPrecioUnitario(pedido.getPrecioUnitario());
-        pedido.setTotal(pedido.getTotal());
+        pedido.setPrecioUnitario(precioUnitario);
+        pedido.setTotal(total);
+        pedido.setProducto(producto);
         return pedidoRepository.save(pedido);
 
     }
@@ -109,24 +114,35 @@ public class MyService {
         Producto producto = productoRepository.findById(id)
                 .orElseThrow(() -> new CustomException("el producto no existe"));
 
+
+        if (pedidoRepository.existsByProductoIdAndEstadoPedido(id, EstadoPedido.PENDIENTE)) {
+            throw new CustomException("no se puede desactivar un producto con pedidos pendientes");
+        }
+
         producto.setActivo(false);
         return productoRepository.save(producto);
     }
 
 
-   /* @Transactional
-    public Pedido cancelarPedidosPendientes(Long id) {
-        Pedido pedido = pedidoRepository.findById(id)
+    @Transactional
+    public List<Pedido> cancelarPedidosPendientes(Long id) {
+        Producto producto = productoRepository.findById(id)
                 .orElseThrow(() -> new CustomException("el pedido no exite"));
 
-        if (pedido.getEstadoPedido() == EstadoPedido.PENDIENTE) {
+        List<Pedido> pendientes = pedidoRepository.findByProductoIdAndEstadoPedido(id, EstadoPedido.PENDIENTE);
+
+        for (Pedido pedido : pendientes) {
+            pedido.setEstadoPedido(EstadoPedido.CANCELADO);
+            producto.setStock(producto.getStock() + pedido.getCantidad());
+            pedidoRepository.save(pedido);
 
         }
+        productoRepository.save(producto);
+        return pendientes;
+    }
 
-    }*/
 
 
-/*
     public Pedido consultarDetallePedido(Long id) {
         return pedidoRepository.findById(id)
                 .orElseThrow(() -> new CustomException("el pedido no existe"));
@@ -135,7 +151,34 @@ public class MyService {
     public List<Producto> consultarProductosPorCategoria(String categoria) {
         return productoRepository.findByCategoria(categoria);
     }
-*/
+
+    public List<Pedido> consultarPedidosPorEstado(EstadoPedido estado) {
+        return pedidoRepository.findByEstadoPedido(estado);
+    }
+
+    public List<Producto> listarProductosActivos() {
+        return productoRepository.findByActivoTrue();
+    }
+
+    public List<ProductoDTO> listarTodosLosProductos() {
+        List<Producto> productos = productoRepository.findAll();
+        List<ProductoDTO> lista = new ArrayList<>();
+
+        for (Producto producto : productos) {
+            lista.add(new ProductoDTO(
+                    producto.getId(),
+                    producto.getNombre(),
+                    producto.getCategoria(),
+                    producto.getPrecio(),
+                    producto.getStock(),
+                    producto.isActivo()
+
+            ));
+        }
+        return lista;
+    }
+
+
 
 
 }
